@@ -1251,7 +1251,7 @@ registerSuite({
 				const createFoo = compose({
 					foo: 1
 				}).static({
-					factoryDescriptor(): ComposeMixinDescriptor<any, any, { foo: number }, any> {
+					factoryDescriptor<T, O>(): ComposeMixinDescriptor<T, O, { foo: number }, {}> {
 						return {
 							mixin: this,
 							initialize: function(instance: { foo: number }) {
@@ -1269,6 +1269,66 @@ registerSuite({
 
 				assert.strictEqual(fooBar.bar, 1, 'Should have bar property');
 				assert.strictEqual(fooBar.foo, 3, 'Should have foo property');
+			},
+
+			'static properties are available but not part of they type after mixing in': function() {
+				const createFoo = compose({
+					foo: 1
+				}).static({
+					doFoo: function(): string {
+						return 'foo';
+					},
+
+					doBaz: function(): string {
+						return 'baz';
+					}
+				});
+
+				const createBar = compose({
+					bar: 1
+				}).static({
+					doBar: function(): string {
+						return 'bar';
+					},
+					doFoo: function(): string {
+						return 'foo too';
+					}
+				});
+
+				const createFooBar = <ComposeFactory<{ foo: number } & { bar: number }, {}> &
+					{
+						doBar(): string;
+						doBaz(): string;
+						doFoo(): string;
+					}> createFoo.mixin(createBar);
+				const foobar = createFooBar();
+
+				assert.strictEqual(createFooBar.doBar(), 'bar', 'Should have returned \'bar\'');
+				assert.strictEqual(createFooBar.doFoo(), 'foo too', 'Should have returned \'foo too\'');
+				assert.strictEqual(createFooBar.doBaz(), 'baz', 'Should have returned \'baz\'');
+				assert.strictEqual(foobar.foo, 1, 'Should have foo property');
+				assert.strictEqual(foobar.bar, 1, 'Should have bar property');
+			},
+
+			'Create should maintain static properties on factory': function() {
+				const createFoo = compose({
+					foo: 1
+				}).static({
+					doFoo(): string {
+						return 'foo';
+					}
+				});
+
+				const createFooWithInit = <ComposeFactory<{ foo: number }, { foo: number }> & { doFoo: () => string }> compose(
+					createFoo,
+					function(instance: { foo: number } , options: { foo: number }){
+						instance.foo = options.foo;
+					}
+				);
+
+				assert.strictEqual(createFooWithInit.doFoo(), 'foo', 'Should have static method');
+
+				assert.strictEqual(createFooWithInit({foo: 10}).foo, 10, 'Should have initalized foo');
 			}
 		}
 	}

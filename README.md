@@ -393,6 +393,10 @@ const createNewFoo = createFoo.static({
 console.log(createNewFoo.doFoo()); // logs 'bar'
 ```
 
+NOTE: Static properties will be maintained when calling mixin or extend, but the type information will not. If
+the static properties from the base or mixin/extension are needed the resulting factory will need to be cast to an
+interface with those static properties defined.
+
 ## How do I use this package?
 
 For now, until the package is fully published you will need to clone the repository to your local machine:

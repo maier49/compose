@@ -27,19 +27,28 @@ function rebase(fn: Function): Function {
  * from one or more sources to a target object. Includes non-enumerable properties
  */
 function copyProperties(target: {}, ...sources: {}[]) {
-  sources.forEach(source => {
-    Object.defineProperties(
-		target,
-		Object.getOwnPropertyNames(source).reduce(
-			(descriptors: { [ index: string ]: any }, key: string) => {
-				descriptors[ key ] = Object.getOwnPropertyDescriptor(source, key);
-				return descriptors;
-			},
-			{}
-		)
-	);
-  });
-  return target;
+	copyPropertiesOverrideDescriptor(target, {}, ...sources);
+}
+
+function copyPropertiesOverrideDescriptor(target: {}, descriptorFlags: {}, ...sources: {}[]) {
+	sources.forEach(source => {
+		Object.defineProperties(
+			target,
+			Object.getOwnPropertyNames(source).reduce(
+				(descriptors: { [ index: string ]: any }, key: string) => {
+					if (!(<any> target)[key] || (<any> Object.getOwnPropertyDescriptor(target, key)).configurable) {
+						descriptors[key] = Object.getOwnPropertyDescriptor(source, key);
+						Object.getOwnPropertyNames(descriptorFlags).forEach(function(descriptorFlagKey) {
+							(<any> descriptors[key])[descriptorFlagKey] = (<any> descriptorFlags)[descriptorFlagKey];
+						});
+					}
+					return descriptors;
+				},
+				{}
+			)
+		);
+	});
+	return target;
 }
 
 /* The rebased functions we need to decorate compose constructors with */
@@ -89,24 +98,21 @@ function cloneFactory(base?: any, staticProperties?: any): any {
 		initFnMap.get(factory).forEach(fn => fn.apply(null, args));
 		return instance;
 	}
+	stamp(factory);
 
 	if (base) {
+		copyPropertiesOverrideDescriptor(factory, { configurable: true }, base);
 		copyProperties(factory.prototype, base.prototype);
-		// TODO or not TODO
-		// if (isComposeFactory(base)) {
-		// 	 copyProperties(factory, base);
-		// }
-		//
 		initFnMap.set(factory, [].concat(initFnMap.get(base)));
 	}
 	else {
 		initFnMap.set(factory, []);
 	}
-	factory.prototype.constructor = factory;
-	stamp(factory);
+
 	if (staticProperties) {
 		copyProperties(factory, staticProperties);
 	}
+	factory.prototype.constructor = factory;
 	Object.freeze(factory);
 
 	return factory;
@@ -190,7 +196,7 @@ export interface Compose {
 
 function extend<T, O, U, P>(base: ComposeFactory<T, O>, extension: ComposeFactory<U, P>): ComposeFactory<T & U, O & P>;
 function extend<O>(base: ComposeFactory<any, O>, extension: any): ComposeFactory<any, O> {
-	base = cloneFactory(base);
+	base = cloneFactory(base, isComposeFactory(extension) ? extension : null);
 	copyProperties(base.prototype, typeof extension === 'function' ? extension.prototype : extension);
 	return base;
 }
@@ -293,10 +299,10 @@ function mixin<T, O, U, P>(
 ): ComposeFactory<T & U, O & P>;
 
 function mixin(base: any, toMixin: any): any {
-	base = cloneFactory(base);
-	const baseInitFns = initFnMap.get(base);
 	toMixin = toMixin.factoryDescriptor ? toMixin.factoryDescriptor() : toMixin;
 	const mixinType =  toMixin.mixin;
+	base = cloneFactory(base, (mixinType && mixinType.prototype) ? mixinType : null);
+	const baseInitFns = initFnMap.get(base);
 	if (mixinType) {
 		let mixinFactory = isComposeFactory(mixinType) ? mixinType : create(mixinType);
 		if (toMixin.initialize) {
@@ -479,13 +485,16 @@ function create<T, O>(base: GenericClass<T>, initFunction?: ComposeInitializatio
 function create<T, O, P>(base: ComposeFactory<T, O>, initFunction?: ComposeInitializationFunction<T, P>): ComposeFactory<T, O & P>;
 function create<T, O>(base: T, initFunction?: ComposeInitializationFunction<T, O>): ComposeFactory<T, O>;
 function create<O>(base: any, initFunction?: ComposeInitializationFunction<any, O>): any {
-	const factory = cloneFactory();
+	const isFactory = isComposeFactory(base);
+	const factory = cloneFactory(isFactory ? base : null);
 	if (initFunction) {
 		initFnMap.get(factory).push(initFunction);
 	}
 
 	/* mixin the base into the prototype */
-	copyProperties(factory.prototype, typeof base === 'function' ? base.prototype : base);
+	if (!isFactory) {
+		copyProperties(factory.prototype, typeof base === 'function' ? base.prototype : base);
+	}
 
    /* return the new constructor */
    return factory;
@@ -493,7 +502,7 @@ function create<O>(base: any, initFunction?: ComposeInitializationFunction<any, 
 
 /* Extend factory with static properties */
 export interface ComposeFactory<T, O> {
-	static<S>(staticProperties: S): ComposeFactory<T, O> & S;
+	static<C extends this, S>(staticProperties: S): C & S;
 }
 
 export interface Compose {
