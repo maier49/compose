@@ -393,9 +393,84 @@ const createNewFoo = createFoo.static({
 console.log(createNewFoo.doFoo()); // logs 'bar'
 ```
 
+If a factory already has static properties, calling its static method again will override those properties on the type,
+but the previously defined static properties still exist on the factory.
+```typescript
+const createFoo = compose({
+	foo: 1
+}).static({
+	doFoo(): string {
+		return 'foo';
+	}
+})
+
+console.log(createFoo.doFoo()); //logs 'foo'
+
+const createFooBar = createFoo.static({
+	doBar(): string {
+		return 'bar';
+	}
+});
+
+console.log(createFooBar.doBar()); //logs 'bar'
+//console.log(createFooBar.doFoo()); Doesn't compile
+console.log((<any> createFooBar).doFoo()); //logs 'foo'
+```
+
+There are a few methods to resolve this. The simplest is to use the `static` method provided on the `compose` object
+```typescript
+const createFoo = compose({
+	foo: 1
+}).static({
+	doFoo(): string {
+		return 'foo';
+	}
+})
+
+console.log(createFoo.doFoo()); //logs 'foo'
+
+const createFooBar = compose.static(
+	createFoo, 
+	{
+        doBar(): string {
+            return 'bar';
+		}
+	}
+);
+
+console.log(createFooBar.doBar()); //logs 'bar'
+console.log(createFooBar.doFoo()); //logs 'foo'
+```
+Alternatively, the intermediate result can be cast to an interface
+```typescript
+interface StaticFoo extends ComposeFactory<{ foo: number }, {}> {
+	doFoo(): string;
+}
+const createFoo: StaticFoo = compose({
+	foo: 1
+}).static({
+	doFoo(): string {
+		return 'foo';
+	}
+});
+
+console.log(createFoo.doFoo()); //logs 'foo'
+
+const createFooBar = compose.static(
+	createFoo, 
+	{
+        doBar(): string {
+            return 'bar';
+		}
+	}
+);
+
+console.log(createFooBar.doBar()); //logs 'bar'
+console.log(createFooBar.doFoo()); //logs 'foo'
+```
 NOTE: Static properties will be maintained when calling mixin or extend, but the type information will not. If
-the static properties from the base or mixin/extension are needed the resulting factory will need to be cast to an
-interface with those static properties defined.
+the static properties from the base or mixin/extension are needed, the resulting factory will need to be cast to an
+interface that defines those static properties.
 
 ## How do I use this package?
 

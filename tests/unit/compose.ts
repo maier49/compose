@@ -1329,6 +1329,32 @@ registerSuite({
 				assert.strictEqual(createFooWithInit.doFoo(), 'foo', 'Should have static method');
 
 				assert.strictEqual(createFooWithInit({foo: 10}).foo, 10, 'Should have initalized foo');
+			},
+
+			'Should extend an assigned interface': function() {
+				interface StaticFoo extends ComposeFactory<{ foo: number }, {}> {
+					doFoo(): string;
+				}
+
+				const createFoo: StaticFoo = compose({
+					foo: 1
+				}).static({
+					doFoo(): string {
+						return 'foo';
+					}
+				});
+
+				const createFooBar = compose.static(
+					createFoo,
+					{
+						doBar(): string {
+							return 'bar';
+						}
+					}
+				);
+
+				assert.strictEqual(createFooBar.doBar(), 'bar', 'Should have doBar method');
+				assert.strictEqual(createFooBar.doFoo(), 'foo', 'Should have doFoo method');
 			}
 		}
 	}
